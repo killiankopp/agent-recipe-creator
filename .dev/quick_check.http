@@ -1,0 +1,8 @@
+# curl -X 'GET'
+#  'http://127.0.0.1:8000/ingredient/v1/'
+#  -H 'accept: application/json'
+GET http://127.0.0.1:8000/ingredient/v1/
+accept: application/json
+
+###
+

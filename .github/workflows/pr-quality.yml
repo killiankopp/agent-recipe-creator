@@ -1,0 +1,110 @@
+name: Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+env:
+  PYTHON_VERSION: "3.13"
+  UV_NO_SOURCES: "1"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - run: uv sync --group dev
+      - run: uv run ruff check .
+
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - run: uv sync --group dev
+      - run: uv run bandit -r . -x ./tests -q
+
+  complexity:
+    name: Complexity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - run: uv sync --group dev
+      - run: |
+          output=$(uv run radon cc . --min C -s)
+          [ -z "$output" ] || { echo "$output"; exit 1; }
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - run: uv sync --group dev
+      - run: uv run pytest --cov=. --cov-fail-under=80
+
+  typecheck:
+    name: Type checking
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - run: uv sync --group dev
+      - run: uv run mypy .
+
+  report:
+    name: Report
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [lint, security, complexity, coverage, typecheck]
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const icon = r => r === 'success' ? '✅' : r === 'skipped' ? '⏭️' : '❌';
+            const checks = [
+              ['Lint',                   '${{ needs.lint.result }}'],
+              ['Security',               '${{ needs.security.result }}'],
+              ['Complexity',             '${{ needs.complexity.result }}'],
+              ['Coverage',               '${{ needs.coverage.result }}'],
+              ['Type checking *(info)*', '${{ needs.typecheck.result }}'],
+            ];
+
+            const rows = checks.map(([name, result]) => `| ${name} | ${icon(result)} |`).join('\n');
+            const body = `## Quality Gate\n\n| Check | Status |\n|---|---|\n${rows}`;
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find(c => c.user.type === 'Bot' && c.body.startsWith('## Quality Gate'));
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

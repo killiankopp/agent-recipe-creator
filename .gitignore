@@ -1,0 +1,11 @@
+.venv/
+.idea/
+.vscode/
+**/__pycache__/
+*.pyc
+*.pyo
+dist/
+*.egg-info/
+.hatch/
+*.dist-info/
+.chainlit/translations/

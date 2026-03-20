@@ -1,0 +1,28 @@
+adapters:
+  logger: console       # choix : console
+  repository: mongodb    # choix : memory  mongodb  duckdb
+  multitenant: false    # true = URI résolue par requête (vault via JWT)
+
+  mongodb:
+    uri: mongodb://localhost:5971  # ignoré si multitenant: true
+    db_name: _sample
+
+  duckdb:               # formats : .csv | .parquet | .json | .arrow
+    path: data/
+
+api:
+  host: 0.0.0.0
+  port: 8000
+  reload: true
+
+mcp:
+  host: 127.0.0.1
+  port: 8001
+
+soft_delete:
+  # durée de rétention en jours avant suppression physique
+  # 0 = suppression immédiate (pas de soft delete)
+  # null = conservation infinie (jamais supprimé physiquement)
+  retention_days: 30
+
+
