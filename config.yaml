@@ -1,28 +1,31 @@
 adapters:
-  logger: console       # choix : console
-  repository: mongodb    # choix : memory  mongodb  duckdb
-  multitenant: false    # true = URI résolue par requête (vault via JWT)
-
+  logger: console
+  repository: mongodb
+  multitenant: false
   mongodb:
-    uri: mongodb://localhost:5971  # ignoré si multitenant: true
-    db_name: _sample
-
-  duckdb:               # formats : .csv | .parquet | .json | .arrow
-    path: data/
-
+    uri: mongodb://localhost:5971
+    db_name: agent-recipe-creator
 api:
   host: 0.0.0.0
-  port: 8000
+  port: 8006
   reload: true
-
 mcp:
   host: 127.0.0.1
-  port: 8001
-
+  port: 8004
 soft_delete:
-  # durée de rétention en jours avant suppression physique
-  # 0 = suppression immédiate (pas de soft delete)
-  # null = conservation infinie (jamais supprimé physiquement)
   retention_days: 30
-
-
+# ── Agent config ──────────────────────────────────────────────────────────────
+mcp_registry:
+  url: http://127.0.0.1:8001/mcp  # URL du service Rekipe exposant les tools MCP
+lm:
+  planner:
+    provider: anthropic
+    model_name: claude-haiku-4-5
+    api_key: YOUR_ANTHROPIC_API_KEY
+    # Pour un LLM local (LM Studio / Ollama) :
+    # provider: openai
+    # model_name: qwen/qwen3.5-9b:2
+    # base_url: http://127.0.0.1:1234/v1
+    # api_key: lm-studio
+fuzzy:
+  threshold: 80

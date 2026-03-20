@@ -1,5 +1,5 @@
-from adapters.output.mongodb.ingredient_repository import MongoDBIngredientRepository
+from adapters.output.mongodb.agent_run_repository import MongoDBAgentRunRepository
 
 __all__ = [
-    "MongoDBIngredientRepository"
+    "MongoDBAgentRunRepository"
 ]

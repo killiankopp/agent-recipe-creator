@@ -1,3 +1,3 @@
-from .ingredient_repository import IngredientRepository
+from .recipe_agent import RecipeAgentPort
 
-__all__ = ["IngredientRepository"]
+__all__ = ["RecipeAgentPort"]

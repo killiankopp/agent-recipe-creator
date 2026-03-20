@@ -1,4 +1,3 @@
-from .find_by_name import FindByNameUseCase
+from .process_raw_recipe import ProcessRawRecipeUseCase
 
-__all__ = ["FindByNameUseCase"]
-
+__all__ = ["ProcessRawRecipeUseCase"]
