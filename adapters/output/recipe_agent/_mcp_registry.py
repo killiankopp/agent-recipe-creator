@@ -25,6 +25,9 @@ class _MCPRecipeRegistry:
         result = await tool.ainvoke(args)
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
+        if result is None:
+            logger.debug(f"  ← MCP {tool_name} None ({elapsed_ms:.0f}ms)")
+            return None
         if not result:
             logger.debug(f"  ← MCP {tool_name} [] ({elapsed_ms:.0f}ms)")
             return []
