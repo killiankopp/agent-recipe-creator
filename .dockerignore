@@ -1,0 +1,37 @@
+# VCS & IDE
+.git/
+.github/
+.githooks/
+.idea/
+.vscode/
+.dev/
+
+# Python cache & artefacts
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.hatch/
+*.dist-info/
+dist/
+
+# Tests & couverture
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Fichiers non nécessaires au runtime
+docs/
+data/
+config.yaml
+*.md
+Makefile
+LICENSE
+.gitignore
+.python-version
+

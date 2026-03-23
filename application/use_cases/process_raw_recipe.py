@@ -2,7 +2,6 @@ import time
 
 from arclith.domain.ports.logger import Logger
 from arclith.domain.ports.repository import Repository
-
 from domain.models.agent_run import AgentRun
 from domain.models.recipe import RecipeResult
 from domain.ports.recipe_agent import RecipeAgentPort
@@ -46,7 +45,10 @@ class ProcessRawRecipeUseCase:
                 recipe_uuid = result.recipe_uuid,
                 elapsed_ms = elapsed_ms,
             )
-        except Exception as exc:
+        except BaseException as exc:
+            # Unwrap ExceptionGroup (asyncio.TaskGroup / anyio) pour exposer la vraie erreur
+            if isinstance(exc, BaseExceptionGroup) and len(exc.exceptions) == 1:
+                exc = exc.exceptions[0]
             elapsed_ms = round((time.perf_counter() - t0) * 1000)
             await self._run_repository.update(
                 run.model_copy(update = {
@@ -56,6 +58,6 @@ class ProcessRawRecipeUseCase:
                 })
             )
             self._logger.error("💥 Agent run failed", run_uuid = run_uuid, error = str(exc))
-            raise
+            raise exc
 
         return result

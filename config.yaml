@@ -16,12 +16,12 @@ soft_delete:
   retention_days: 30
 # ── Agent config ──────────────────────────────────────────────────────────────
 mcp_registry:
-  url: http://127.0.0.1:8001/mcp  # URL du service Rekipe exposant les tools MCP
+  url: http://127.0.0.1:8302/mcp  # URL du service Rekipe exposant les tools MCP
 lm:
   planner:
     provider: anthropic
     model_name: claude-haiku-4-5
-    api_key: YOUR_ANTHROPIC_API_KEY
+    api_key: ${ANTHROPIC_API_KEY}
     # Pour un LLM local (LM Studio / Ollama) :
     # provider: openai
     # model_name: qwen/qwen3.5-9b:2

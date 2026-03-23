@@ -1,7 +1,7 @@
 import json
+import time
 from typing import Any
 
-import time
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from adapters.output.recipe_agent._logger import log as logger
@@ -10,7 +10,7 @@ from adapters.output.recipe_agent._logger import log as logger
 class _MCPRecipeRegistry:
     def __init__(self, url: str) -> None:
         self._client = MultiServerMCPClient(
-            {"rekipe": {"url": url, "transport": "streamable_http"}}
+            {"rekipe": {"url": url, "transport": "http"}}
         )
 
     async def _call(self, tool_name: str, args: dict) -> Any:
