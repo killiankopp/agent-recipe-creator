@@ -59,12 +59,12 @@ def _build_model(settings: LMSettings):
 
 class _PydanticAIPlanner:
     def __init__(self, settings: LMSettings) -> None:
-        self._agent: Agent[None, RecipePlan] = Agent(
+        self._agent = cast(Agent[None, RecipePlan], Agent(
             _build_model(settings),
             output_type=RecipePlan,
             system_prompt=_SYSTEM_PROMPT,
             retries=3,
-        )
+        ))
 
     async def plan(self, user_input: str) -> RecipePlan:
         result = await self._agent.run(user_input)
