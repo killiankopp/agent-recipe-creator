@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - run: uv run ruff check .
 
   security:
@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - run: uv run bandit -r . -x ./tests -q
 
   complexity:
@@ -47,7 +47,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - run: |
           output=$(uv run radon cc . --min C -s)
           [ -z "$output" ] || { echo "$output"; exit 1; }
@@ -61,7 +61,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - run: uv run pytest --cov=. --cov-fail-under=80
 
   typecheck:
@@ -74,7 +74,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - run: uv sync --group dev
+      - run: uv sync --frozen --group dev
       - run: uv run mypy .
 
   report:
