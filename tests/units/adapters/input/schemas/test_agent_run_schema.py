@@ -8,19 +8,34 @@ def _now() -> datetime:
     return datetime.now(tz = timezone.utc)
 
 
-def test_agent_run_schema_from_entity():
-    from uuid import UUID as StdUUID
+def _make_schema():
+    run = AgentRun(raw_input="recette de test")
+    return run, AgentRunSchema.model_validate(run, from_attributes=True)
 
-    run = AgentRun(raw_input = "recette de test")
-    schema = AgentRunSchema.model_validate(run, from_attributes = True)
+
+def test_agent_run_schema_uuid():
+    from uuid import UUID as StdUUID
+    run, schema = _make_schema()
     assert isinstance(schema.uuid, StdUUID)
     assert str(schema.uuid) == str(run.uuid)
+
+
+def test_agent_run_schema_basic_fields():
+    _, schema = _make_schema()
     assert schema.raw_input == "recette de test"
     assert schema.status == "pending"
+    assert schema.metadata == {}
+
+
+def test_agent_run_schema_nullable_fields():
+    _, schema = _make_schema()
     assert schema.recipe_uuid is None
     assert schema.recipe_name is None
     assert schema.error is None
-    assert schema.metadata == {}
+
+
+def test_agent_run_schema_timestamps():
+    _, schema = _make_schema()
     assert isinstance(schema.created_at, datetime)
     assert isinstance(schema.updated_at, datetime)
 
