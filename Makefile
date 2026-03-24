@@ -10,13 +10,13 @@ lint:
 	$(UV) ruff check $(SRC)
 
 typecheck:
-	$(UV) mypy $(SRC)
+	$(UV) mypy .
 
 security:
 	$(UV) bandit -r $(SRC) -ll
 
 complexity:
-	@output=$$($(UV) radon cc $(SRC) --min C -s); \
+	@output=$$($(UV) radon cc . --min C -s); \
 	if [ -n "$$output" ]; then echo "$$output"; exit 1; fi
 
 test:
