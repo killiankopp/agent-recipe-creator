@@ -1,3 +1,5 @@
+from typing import cast
+
 from pydantic_ai import Agent
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIModelProfile
