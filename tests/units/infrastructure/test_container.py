@@ -25,8 +25,8 @@ def test_build_container_returns_services():
     from application.services.agent_run_service import AgentRunService
 
     with (
-        patch("infrastructure.container.MongoDBAgentRunRepository"),
-        patch("infrastructure.container.RecipeAgentAdapter"),
+        patch("infrastructure.containers.container.MongoDBAgentRunRepository"),
+        patch("infrastructure.containers.container.RecipeAgentAdapter"),
     ):
         recipe_service, run_service, logger = build_container(
             _mock_arclith(), MagicMock()
