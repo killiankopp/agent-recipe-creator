@@ -1,6 +1,8 @@
 name: Quality Gate
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -11,7 +13,6 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.13"
-  UV_NO_SOURCES: "1"
 
 jobs:
   lint:
@@ -23,8 +24,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - run: uv sync --group dev
-      - run: uv run ruff check .
+      - run: uv sync --frozen --group dev
+      - run: make lint
 
   security:
     name: Security
@@ -35,8 +36,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - run: uv sync --group dev
-      - run: uv run bandit -r . -x ./tests -q
+      - run: uv sync --frozen --group dev
+      - run: make security
 
   complexity:
     name: Complexity
@@ -47,22 +48,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - run: uv sync --group dev
-      - run: |
-          output=$(uv run radon cc . --min C -s)
-          [ -z "$output" ] || { echo "$output"; exit 1; }
-
-  coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          enable-cache: true
-      - run: uv sync --group dev
-      - run: uv run pytest --cov=. --cov-fail-under=80
+      - run: uv sync --frozen --group dev
+      - run: make complexity
 
   typecheck:
     name: Type checking
@@ -74,13 +61,25 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - run: uv sync --group dev
-      - run: uv run mypy .
+      - run: uv sync --frozen --group dev
+      - run: make typecheck
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - run: uv sync --frozen --group dev
+      - run: make coverage
 
   report:
     name: Report
     runs-on: ubuntu-latest
-    if: always()
+    if: always() && github.event_name == 'pull_request'
     needs: [lint, security, complexity, coverage, typecheck]
     steps:
       - uses: actions/github-script@v7

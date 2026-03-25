@@ -21,12 +21,15 @@ dependencies = [
 explicit_package_bases = true
 
 [tool.coverage.run]
+source = ["domain", "adapters", "application", "infrastructure"]
+branch = true
 omit = [
     "main_*.py",
-    "__init__.py",
+    "**/__init__.py",
 ]
 
 [tool.coverage.report]
+fail_under = 80
 exclude_lines = [
     "if __name__ == .__main__.:",
 ]
