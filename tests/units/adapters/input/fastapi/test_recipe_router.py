@@ -38,9 +38,10 @@ async def test_ai_create_success():
     router = _make_router(_SuccessAgent())
     payload = AiCreateRequestSchema(raw_text = "Une recette de tarte classique au citron meringuée")
     result = await router.ai_create(payload)
-    assert result.recipe_uuid == "r-uuid"
-    assert result.recipe_name == "Tarte au citron"
-    assert "Tarte" in result.formatted_response
+    assert result.status == "success"
+    assert result.data.recipe_uuid == "r-uuid"
+    assert result.data.recipe_name == "Tarte au citron"
+    assert "Tarte" in result.data.formatted_response
 
 
 async def test_ai_create_raises_500_on_agent_failure():

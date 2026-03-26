@@ -16,7 +16,8 @@ def _make_service() -> AgentRunService:
 async def test_list_runs_empty():
     router = AgentRunRouter(_make_service(), NullLogger())
     result = await router.list_runs()
-    assert result == []
+    assert result.status == "success"
+    assert result.data == []
 
 
 async def test_list_runs_returns_all():
@@ -25,7 +26,7 @@ async def test_list_runs_returns_all():
     await service.create(AgentRun(raw_input = "recette 2"))
     router = AgentRunRouter(service, NullLogger())
     result = await router.list_runs()
-    assert len(result) == 2
+    assert len(result.data) == 2
 
 
 async def test_list_runs_schema_fields():
@@ -33,10 +34,10 @@ async def test_list_runs_schema_fields():
     run = await service.create(AgentRun(raw_input = "test"))
     router = AgentRunRouter(service, NullLogger())
     result = await router.list_runs()
-    assert len(result) == 1
-    assert str(result[0].uuid) == str(run.uuid)
-    assert result[0].raw_input == "test"
-    assert result[0].status == "pending"
+    assert len(result.data) == 1
+    assert str(result.data[0].uuid) == str(run.uuid)
+    assert result.data[0].raw_input == "test"
+    assert result.data[0].status == "pending"
 
 
 async def test_get_run_found():
@@ -45,8 +46,9 @@ async def test_get_run_found():
     router = AgentRunRouter(service, NullLogger())
     std_uuid = _uuid.UUID(str(run.uuid))
     result = await router.get_run(std_uuid)
-    assert str(result.uuid) == str(run.uuid)
-    assert result.raw_input == "beignets"
+    assert result.status == "success"
+    assert str(result.data.uuid) == str(run.uuid)
+    assert result.data.raw_input == "beignets"
 
 
 async def test_get_run_not_found_raises_404():

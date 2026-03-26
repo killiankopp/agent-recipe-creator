@@ -132,7 +132,7 @@ wheels = [
 
 [[package]]
 name = "arclith"
-version = "0.3.0"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
@@ -142,9 +142,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "uuid6" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/55/17/dcfecbef6eb70c6b94e6c6d0e63c689627dfb85f5bc9c303f6fedd1cb0dd/arclith-0.3.0.tar.gz", hash = "sha256:f86adfb6d361597e7811b2dc1b555f4334d47d184c7ab4628bbbd4d3070728b7", size = 121803, upload-time = "2026-03-25T08:26:03.743Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/99/36/05f4f933a0450d21626d836c15f505e1e1f31cef7d0f5c906fb10c4f7c6f/arclith-0.4.0.tar.gz", hash = "sha256:aee76af0db2ab74a1918dcfe783737774ba41248f967af342059f1e63bd98f5b", size = 174271, upload-time = "2026-03-25T23:16:54.563Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/94/47/0c9ea82cae50643fb4a5ac058d0d2276c1711151d3307777be1995fc6e04/arclith-0.3.0-py3-none-any.whl", hash = "sha256:c762cdb4344006dd489bb2ea768620a499692a7a19a00707b5e9e8c8b08220b0", size = 39449, upload-time = "2026-03-25T08:26:02.412Z" },
+    { url = "https://files.pythonhosted.org/packages/09/11/9125ceab4006df8983e15b7341fe4e1eb1643b966662bc05212a6b622741/arclith-0.4.0-py3-none-any.whl", hash = "sha256:57aebe9d60c46e0a9ac6fb7dffc22c7601582c55bc769d7eee5a79e84ff93d29", size = 41717, upload-time = "2026-03-25T23:16:53.02Z" },
 ]
 
 [package.optional-dependencies]
@@ -2294,7 +2294,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "arclith", extras = ["mongodb", "fastapi", "mcp", "duckdb", "vault"], specifier = ">=0.3.0" },
+    { name = "arclith", extras = ["mongodb", "fastapi", "mcp", "duckdb", "vault"], specifier = ">=0.4.0" },
     { name = "langchain-mcp-adapters", specifier = ">=0.1.0" },
     { name = "langgraph", specifier = ">=0.4.0" },
     { name = "loguru", specifier = ">=0.7" },
