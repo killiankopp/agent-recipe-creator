@@ -19,21 +19,24 @@ branchement conditionnel (`check_recipe` → `exists|new`) et maintient un `stat
 
 ---
 
-## ADR-002 — `langchain-mcp-adapters` comme proxy MCP
+## ADR-002 — Contrat `recipe/` centralisé dans `_MCPRecipeRegistry`
 
 **Contexte :** Comment appeler les tools MCP de `recipe/` depuis le graphe LangGraph.
 
-**Décision :** `MultiServerMCPClient` de `langchain-mcp-adapters`, encapsulé dans `_MCPRecipeRegistry`.
+**Décision :** `_MCPRecipeRegistry` reste l'unique façade d'accès à `recipe/`. La configuration MCP est conservée,
+mais les opérations critiques de création/lecture passent par l'API HTTP `recipe_api.url` pour rester alignées avec le
+contrat V2 des recettes complètes et éviter les problèmes de boucle async observés avec le client MCP local.
 
 **Pourquoi pas l'alternative évidente (appel HTTP direct vers l'API REST de `recipe/`) :**
-Les tools MCP exposent une interface normalisée avec descriptions et schémas. `langchain-mcp-adapters` gère le protocole
-MCP, la sérialisation et la liste des tools disponibles. Appeler l'API REST directement contournerait le contrat MCP et
-créerait un couplage fort sur les routes REST.
+Le graphe ne doit pas connaître les routes REST. L'appel HTTP est encapsulé dans `_MCPRecipeRegistry`, qui conserve les
+noms d'opérations métier (`list_ingredients`, `create_recipe`, etc.) et isole le couplage technique dans un seul fichier.
 
 **Conséquence sur le code :**
 
 - `_MCPRecipeRegistry._call(tool_name, args)` est le seul point d'appel vers `recipe/`.
-- L'URL MCP est dans `config.yaml` → `mcp_registry.url`.
+- L'URL MCP reste dans `config.yaml` → `mcp_registry.url`.
+- L'URL HTTP est dans `config.yaml` → `recipe_api.url`.
+- Le tenant est transmis via l'en-tête `X-Tenant-URI`.
 - Le client est instancié une seule fois dans `RecipeAgentAdapter.__init__`.
 
 ---
@@ -77,20 +80,22 @@ et mesurer les performances.
 
 ---
 
-## ADR-005 — Secrets LLM dans `config.yaml` (temporaire)
+## ADR-005 — Secrets LLM hors `config.yaml`
 
 **Contexte :** Gestion de la clé API Anthropic/OpenAI.
 
-**Décision actuelle :** La clé API est dans `config.yaml` (`lm.planner.api_key`).
+**Décision actuelle :** `config.yaml` conserve uniquement une référence `${ANTHROPIC_API_KEY}`.
+La clé réelle est résolue en priorité depuis Vault via `config/secrets.yaml`.
+Le fallback local reste `secrets.yaml` non versionné, puis la variable d'environnement.
 
-**Problème connu :** `config.yaml` est versionné dans Git — la clé ne doit PAS être committée.
+**Problème connu :** `config.yaml` est versionné dans Git — la clé ne doit jamais y être écrite.
 
-**Migration recommandée :**
-Remplacer la valeur dans `config.yaml` par `${ANTHROPIC_API_KEY}` et résoudre via `os.environ` dans
-`load_agent_config()`, ou utiliser un vault (HashiCorp Vault, AWS Secrets Manager).
+**Règle locale :** écrire la clé dans Vault au chemin `kv/rekipe/agent-recipe-creator/anthropic`,
+champ `value`. Pour un développement hors Vault, créer `agent-recipe-creator/secrets.yaml`
+depuis `secrets.yaml.template` et renseigner `lm.planner.api_key`.
 
 **Conséquence sur le code :**
 
-- `infrastructure/config.py` → `load_agent_config()` doit interpoler les variables d'environnement.
-- `.gitignore` doit exclure `config.yaml` ou un fichier `config.local.yaml` doit être utilisé pour les secrets.
-
+- `config/secrets.yaml` mappe `lm.planner.api_key` vers `rekipe/agent-recipe-creator/anthropic`.
+- `infrastructure/config.py` → `load_agent_config()` fusionne `config.yaml`, applique Vault/YAML et garde le fallback environnement.
+- `.gitignore` exclut `secrets.yaml`.

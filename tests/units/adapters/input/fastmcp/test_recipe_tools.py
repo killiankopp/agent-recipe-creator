@@ -34,6 +34,27 @@ async def test_ai_create_recipe_success():
     result = await mcp.call_tool("ai_create_recipe", {"raw_text": "pasta carbonara"})
     assert result.structured_content["recipe_uuid"] == "uuid-1"
     assert result.structured_content["recipe_name"] == "Carbonara"
+    assert result.structured_content["created"] is True
+    service.ai_create.assert_awaited_once_with("pasta carbonara", allow_duplicate=False)
+
+
+async def test_ai_create_recipe_accepts_allow_duplicate():
+    mcp = _make_mcp()
+    service = MagicMock()
+    service.ai_create = AsyncMock(return_value=RecipeResult(
+        recipe_uuid="uuid-2",
+        recipe_name="Carbonara",
+        resolved_ingredients={},
+        resolved_ustensils={},
+        formatted_response="ok",
+    ))
+    RecipeMCP(service, MagicMock(), mcp)
+
+    await mcp.call_tool(
+        "ai_create_recipe",
+        {"raw_text": "pasta carbonara", "allow_duplicate": True},
+    )
+    service.ai_create.assert_awaited_once_with("pasta carbonara", allow_duplicate=True)
 
 
 async def test_ai_create_recipe_raises_on_error():

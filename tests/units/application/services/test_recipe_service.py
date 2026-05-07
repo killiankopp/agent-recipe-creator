@@ -11,7 +11,13 @@ class _StubAgent(RecipeAgentPort):
     def __init__(self, result: RecipeResult) -> None:
         self._result = result
 
-    async def process(self, raw_text: str, run_uuid: str) -> RecipeResult:
+    async def process(
+            self,
+            raw_text: str,
+            run_uuid: str,
+            *,
+            allow_duplicate: bool = False,
+    ) -> RecipeResult:
         return self._result
 
 
@@ -33,11 +39,17 @@ async def test_ai_create_returns_result():
 
 
 async def test_ai_create_passes_raw_text_to_agent():
-    received: list[str] = []
+    received: list[tuple[str, bool]] = []
 
     class _CapturingAgent(RecipeAgentPort):
-        async def process(self, raw_text: str, run_uuid: str) -> RecipeResult:
-            received.append(raw_text)
+        async def process(
+                self,
+                raw_text: str,
+                run_uuid: str,
+                *,
+                allow_duplicate: bool = False,
+        ) -> RecipeResult:
+            received.append((raw_text, allow_duplicate))
             return RecipeResult(
                 recipe_uuid = "r-2",
                 recipe_name = "Test",
@@ -50,5 +62,5 @@ async def test_ai_create_passes_raw_text_to_agent():
         _CapturingAgent(), InMemoryRepository[AgentRun](), NullLogger()
     )
     service = RecipeService(use_case)
-    await service.ai_create("ma recette personnalisée")
-    assert received == ["ma recette personnalisée"]
+    await service.ai_create("ma recette personnalisée", allow_duplicate = True)
+    assert received == [("ma recette personnalisée", True)]

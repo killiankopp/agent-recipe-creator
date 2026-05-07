@@ -10,3 +10,5 @@ dist/
 *.dist-info/
 .chainlit/translations/
 config.yaml
+secrets.yaml
+!config/secrets.yaml

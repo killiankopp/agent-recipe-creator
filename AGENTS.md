@@ -1,16 +1,23 @@
 # AGENTS.md — `agent-recipe-creator/`
 
+Document d'entrée pour tout agent de codage qui intervient sur ce repo.
+Lecture obligatoire avant toute modification.
+
+Pour le contexte global du projet et les conventions transverses, voir `../AGENTS.md` à la racine du workspace.
+
+---
+
 ## Contexte global
 
 `agent-recipe-creator/` est l'agent IA de Rekipe. Il transforme du texte brut (description d'une recette) en entités
-structurées persistées dans `recipe/`. Il ne possède aucune entité métier propre — il délègue toute persistance aux MCP
-tools de `recipe/` (`:8302`).
+structurées persistées dans `recipe/`. Il ne possède aucune entité métier propre — il délègue toute persistance au
+service `recipe/`.
 
 ## Rôle
 
 - Structurer une recette en langage naturel via un LLM (`_PydanticAIPlanner`)
 - Résoudre les ingrédients et ustensiles existants par fuzzy matching (`rapidfuzz`)
-- Créer les entités manquantes et lier les entités résolues via MCP
+- Créer les entités manquantes et créer la recette complète dans `recipe/`
 - Persister un `AgentRun` (traçabilité de chaque exécution)
 - Exposer le résultat via REST (`:8006`), MCP (`:8004`) et CLI
 
@@ -63,7 +70,7 @@ adapters/
       _logger.py         # logger module-level
 
 infrastructure/
-  config.py      # AgentConfig — mcp_registry, lm, fuzzy (Pydantic)
+  config.py      # AgentConfig — mcp_registry, recipe_api, lm, fuzzy (Pydantic)
   container.py   # build_container() — DI : repo + agent + use case + service
   ingredient_container.py
 ```
@@ -76,10 +83,7 @@ infrastructure/
               └─ new → [resolve_ingredients]
                            → [resolve_ustensils]
                                → [create_recipe]
-                                   → [link_ingredients]
-                                       → [link_ustensils]
-                                           → [create_steps]
-                                               → END
+                                   → END
 ```
 
 | Nœud                  | Rôle                                                        | MCP tools appelés                       |
@@ -87,11 +91,8 @@ infrastructure/
 | `plan`                | LLM extrait `RecipePlan` depuis le texte brut               | — (pydantic-ai)                         |
 | `check_recipe`        | Fuzzy match sur `list_recipes(name)`                        | `list_recipes`                          |
 | `resolve_ingredients` | Pour chaque ingredient : fuzzy match ou `create_ingredient` | `list_ingredients`, `create_ingredient` |
-| `resolve_ustensils`   | Pour chaque ustensile : fuzzy match ou `create_ustensil`    | `list_ustensils`, `create_ustensil`     |
-| `create_recipe`       | Crée la recette vide                                        | `create_recipe`                         |
-| `link_ingredients`    | Lie les ingrédients résolus                                 | `link_ingredient_to_recipe`             |
-| `link_ustensils`      | Lie les ustensiles résolus                                  | `link_ustensil_to_recipe`               |
-| `create_steps`        | Crée les étapes dans l'ordre                                | `create_step`                           |
+| `resolve_ustensils`   | Pour chaque ustensile : fuzzy match ou `create_equipment`   | `list_equipment`, `create_equipment`    |
+| `create_recipe`       | Crée la recette complète avec références UUID               | `create_recipe`                         |
 
 ## State LangGraph (`RecipeAgentState`)
 
@@ -111,11 +112,15 @@ infrastructure/
 mcp_registry:
   url: http://127.0.0.1:8302/mcp    # URL du serveur MCP recipe/
 
+recipe_api:
+  url: http://127.0.0.1:8301        # URL HTTP du service recipe/
+  tenant_uri: foyer-demo
+
 lm:
   planner:
     provider: anthropic              # anthropic | openai
-    model_name: claude-haiku-4-5
-    api_key: sk-ant-...              # NE PAS COMMITTER — utiliser env var
+    model_name: claude-haiku-4-5-20251001
+    api_key: ${ANTHROPIC_API_KEY}    # fallback ; la valeur cible vient de Vault via config/secrets.yaml
     # Pour un LLM local (LM Studio / Ollama) :
     # provider: openai
     # base_url: http://127.0.0.1:1234/v1
@@ -139,6 +144,11 @@ mcp:
 ## Ordre de démarrage (dev local)
 
 ```bash
+# 0. Configurer Anthropic dans Vault
+export VAULT_ADDR="http://127.0.0.1:5991"
+export VAULT_TOKEN="<token-vault>"
+vault kv put kv/rekipe/agent-recipe-creator/anthropic value="sk-ant-..."
+
 # 1. Démarrer recipe/
 cd recipe && uv run --frozen python main_mcp_http.py
 
@@ -166,6 +176,23 @@ uv run --frozen python main_cli.py "Recette de carbonara"
 3. `adapters/output/recipe_agent/_nodes.py` — tous les nœuds
 4. `adapters/output/recipe_agent/_mcp_registry.py` — appels MCP vers recipe/
 5. `application/use_cases/process_raw_recipe.py` — orchestration + traçabilité
-6. `infrastructure/config.py` — AgentConfig (mcp_registry, lm, fuzzy)
+6. `infrastructure/config.py` — AgentConfig (mcp_registry, recipe_api, lm, fuzzy)
 7. `infrastructure/container.py` — DI et câblage
 
+## Règle du journal — rappel
+
+Toute modification non triviale doit être consignée dans `journal/YYYY-MM-DD-slug.md` à la **racine du workspace**. Voir `../AGENTS.md` §6 et `../journal/README.md`.
+
+Cas spécifiques à ce repo qui exigent une entrée journal :
+
+- ajout / retrait / renommage d'un nœud du graphe LangGraph ;
+- changement du contrat MCP avec `recipe/` (nouveau tool consommé, signature différente) ;
+- changement de provider ou de modèle LLM par défaut ;
+- ajustement structurant du seuil de fuzzy matching ou de la stratégie de résolution ;
+- changement de port (REST `8006`, MCP `8004`).
+
+## Hors scope
+
+- La **persistance des recettes** : ce repo ne persiste rien d'autre que `AgentRun`. Tout le reste passe par `recipe/` via MCP.
+- Le **catalogue ingrédients / équipements / tags** : il vit dans `recipe/`. Cet agent y crée ou y résout des entrées via les tools MCP exposés par `recipe/`, jamais via accès direct à la base.
+- Le **frontend** : `gwel/`.

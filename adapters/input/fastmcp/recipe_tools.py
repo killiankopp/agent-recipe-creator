@@ -27,16 +27,29 @@ class RecipeMCP:
                         examples = ["Tarte tatin : 6 pommes, 150g beurre, 200g sucre…"],
                     ),
                 ],
+                allow_duplicate: Annotated[
+                    bool,
+                    Field(description = "Créer un doublon si une recette équivalente existe déjà."),
+                ] = False,
         ) -> dict:
             """Structure and register a raw recipe via AI agent."""
             try:
-                result = await service.ai_create(raw_text)
+                result = await service.ai_create(raw_text, allow_duplicate = allow_duplicate)
             except Exception as exc:
                 logger.error("💥 ai_create_recipe failed via MCP", error = str(exc))
                 raise
-            logger.info("✅ Recipe created via MCP", recipe_uuid = result.recipe_uuid, name = result.recipe_name)
+            logger.info(
+                "✅ Recipe processed via MCP",
+                recipe_uuid = result.recipe_uuid,
+                name = result.recipe_name,
+                created = result.created,
+            )
             return AiCreateResponseSchema(
                 recipe_uuid = result.recipe_uuid,
                 recipe_name = result.recipe_name,
                 formatted_response = result.formatted_response,
+                created = result.created,
+                duplicate_confirmation_required = result.duplicate_confirmation_required,
+                existing_recipe_uuid = result.existing_recipe_uuid,
+                existing_recipe_name = result.existing_recipe_name,
             ).model_dump()

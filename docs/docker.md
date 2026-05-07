@@ -38,10 +38,18 @@ _configs/
     └── config.yaml   ← copié depuis agent-recipe-creator/config.yaml, à adapter
 ```
 
-**Remplir obligatoirement dans `_configs/agent-recipe-creator/config.yaml` :**
+**Remplir obligatoirement dans `_configs/agent-recipe-creator/config.yaml`
+ou fournir via Vault / variable d'environnement :**
 
-- `lm.planner.api_key` — clé Anthropic (ou credentials du LLM local)
+- `lm.planner.api_key` — clé Anthropic (résolue par Vault via `config/secrets.yaml`, ou credentials du LLM local)
 - `mcp_registry.url` — URL MCP du service `recipe` joignable depuis le conteneur
+- `recipe_api.url` — URL HTTP du service `recipe` joignable depuis le conteneur
+
+Chemin Vault attendu pour Anthropic :
+
+```bash
+vault kv put kv/rekipe/agent-recipe-creator/anthropic value="sk-ant-..."
+```
 
 ---
 
@@ -89,8 +97,8 @@ docker run --rm -i $CONFIG killiankopp/agent-recipe-creator python main_mcp_stdi
 
 ## Production
 
-En production, ne pas monter un fichier bind-mount. Injecter la config (et notamment l'API key) via un **Docker secret**
-ou un **ConfigMap Kubernetes**.
+En production, ne pas monter un fichier bind-mount contenant une clé API. Injecter la configuration non sensible via
+ConfigMap et résoudre les secrets via Vault, ou utiliser un Docker/Kubernetes Secret si Vault n'est pas disponible.
 
 **Docker Swarm / standalone secret :**
 
@@ -111,4 +119,3 @@ docker run --rm \
 # Le ConfigMap est monté via volumeMounts[].mountPath: /app/config.yaml
 # La clé API est injectée via un Secret séparé (pas dans le ConfigMap)
 ```
-

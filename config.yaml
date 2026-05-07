@@ -17,10 +17,13 @@ soft_delete:
 # ── Agent config ──────────────────────────────────────────────────────────────
 mcp_registry:
   url: http://127.0.0.1:8302/mcp  # URL du service Rekipe exposant les tools MCP
+recipe_api:
+  url: http://127.0.0.1:8301
+  tenant_uri: foyer-demo
 lm:
   planner:
     provider: anthropic
-    model_name: claude-haiku-4-5
+    model_name: claude-haiku-4-5-20251001
     api_key: ${ANTHROPIC_API_KEY}
     # Pour un LLM local (LM Studio / Ollama) :
     # provider: openai

@@ -18,14 +18,14 @@ class ProcessRawRecipeUseCase:
         self._run_repository = run_repository
         self._logger = logger
 
-    async def execute(self, raw_text: str) -> RecipeResult:
+    async def execute(self, raw_text: str, *, allow_duplicate: bool = False) -> RecipeResult:
         run = await self._run_repository.create(AgentRun(raw_input = raw_text, status = "running"))
         run_uuid = str(run.uuid)
         self._logger.info("▶ Agent run started", run_uuid = run_uuid, input_length = len(raw_text))
         t0 = time.perf_counter()
 
         try:
-            result = await self._agent.process(raw_text, run_uuid)
+            result = await self._agent.process(raw_text, run_uuid, allow_duplicate = allow_duplicate)
             elapsed_ms = round((time.perf_counter() - t0) * 1000)
             await self._run_repository.update(
                 run.model_copy(update = {
@@ -36,6 +36,9 @@ class ProcessRawRecipeUseCase:
                         "elapsed_ms": elapsed_ms,
                         "resolved_ingredients": len(result.resolved_ingredients),
                         "resolved_ustensils": len(result.resolved_ustensils),
+                        "created": result.created,
+                        "duplicate_confirmation_required": result.duplicate_confirmation_required,
+                        "existing_recipe_uuid": result.existing_recipe_uuid,
                     },
                 })
             )
