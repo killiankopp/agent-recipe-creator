@@ -2,28 +2,21 @@ import json
 import time
 from typing import Any
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_mcp_adapters.sessions import StreamableHttpConnection
+import httpx
 
 from adapters.output.recipe_agent._logger import log as logger
 
 
 class _MCPRecipeRegistry:
-    def __init__(self, url: str) -> None:
-        self._client = MultiServerMCPClient(
-            {"rekipe": StreamableHttpConnection(url=url, transport="streamable_http")}
-        )
+    def __init__(self, url: str, api_url: str, tenant_uri: str) -> None:
+        self._mcp_url = url
+        self._api_url = api_url.rstrip("/")
+        self._tenant_uri = tenant_uri
 
     async def _call(self, tool_name: str, args: dict) -> Any:
-        tools = await self._client.get_tools()
-        tool = next((t for t in tools if t.name == tool_name), None)
-        if tool is None:
-            available = [t.name for t in tools]
-            raise ValueError(f"MCP tool '{tool_name}' not found. Available: {available}")
-
         logger.debug(f"  → MCP {tool_name}({json.dumps(args, ensure_ascii = False)})")
         t0 = time.perf_counter()
-        result = await tool.ainvoke(args)
+        result = await self._call_http(tool_name, args)
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
         if result is None:
@@ -39,6 +32,48 @@ class _MCPRecipeRegistry:
 
         logger.debug(f"  ← MCP {tool_name} {repr(result)[:200]} ({elapsed_ms:.0f}ms)")
         return result
+
+    async def _call_http(self, tool_name: str, args: dict) -> Any:
+        headers = {"X-Tenant-URI": self._tenant_uri}
+        async with httpx.AsyncClient(base_url=self._api_url, timeout=30.0, headers=headers) as client:
+            match tool_name:
+                case "list_ingredients":
+                    return await self._get_page(client, "/v1/ingredients/", {"name": args["name"]})
+                case "create_ingredient":
+                    return await self._post_representation(
+                        client,
+                        "/v1/ingredients/",
+                        {"name": args["name"], "unit": args.get("unit")},
+                    )
+                case "list_equipment":
+                    return await self._get_page(client, "/v1/equipment/", {"name": args["name"]})
+                case "create_equipment":
+                    return await self._post_representation(client, "/v1/equipment/", {"name": args["name"]})
+                case "list_recipes":
+                    return await self._get_page(client, "/v1/recipes/", {"name": args["name"]})
+                case "create_recipe":
+                    return await self._post_representation(client, "/v1/recipes/", args["payload"])
+                case _:
+                    raise ValueError(
+                        f"Recipe registry operation '{tool_name}' is not supported by the HTTP adapter "
+                        f"(MCP URL configured: {self._mcp_url})"
+                    )
+
+    @staticmethod
+    async def _get_page(client: httpx.AsyncClient, path: str, params: dict[str, Any]) -> list[dict]:
+        response = await client.get(path, params={**params, "page": 1, "per_page": 50})
+        response.raise_for_status()
+        payload = response.json()
+        return payload.get("data") or []
+
+    @staticmethod
+    async def _post_representation(client: httpx.AsyncClient, path: str, payload: dict[str, Any]) -> dict:
+        response = await client.post(path, json=payload, headers={"Prefer": "return=representation"})
+        response.raise_for_status()
+        data = response.json().get("data")
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid response from {path}: expected object data")
+        return data
 
     # ── Ingredients ───────────────────────────────────────────────────────────
 
@@ -63,36 +98,27 @@ class _MCPRecipeRegistry:
     async def purge_ingredients(self) -> dict:
         return await self._call("purge_ingredients", {})
 
-    # ── Ustensils ─────────────────────────────────────────────────────────────
+    # ── Equipment ─────────────────────────────────────────────────────────────
+
+    async def list_equipment(self, name: str) -> list[dict]:
+        return await self._call("list_equipment", {"name": name})
+
+    async def create_equipment(self, name: str) -> dict:
+        return await self._call("create_equipment", {"name": name})
 
     async def list_ustensils(self, name: str) -> list[dict]:
-        return await self._call("list_ustensils", {"name": name})
+        return await self.list_equipment(name)
 
     async def create_ustensil(self, name: str) -> dict:
-        return await self._call("create_ustensil", {"name": name})
-
-    async def get_ustensil(self, uuid: str) -> dict | None:
-        return await self._call("get_ustensil", {"uuid": uuid})
-
-    async def update_ustensil(self, uuid: str, name: str) -> dict:
-        return await self._call("update_ustensil", {"uuid": uuid, "name": name})
-
-    async def delete_ustensil(self, uuid: str) -> None:
-        await self._call("delete_ustensil", {"uuid": uuid})
-
-    async def duplicate_ustensil(self, uuid: str) -> dict:
-        return await self._call("duplicate_ustensil", {"uuid": uuid})
-
-    async def purge_ustensils(self) -> dict:
-        return await self._call("purge_ustensils", {})
+        return await self.create_equipment(name)
 
     # ── Recipes ───────────────────────────────────────────────────────────────
 
     async def list_recipes(self, name: str) -> list[dict]:
         return await self._call("list_recipes", {"name": name})
 
-    async def create_recipe(self, name: str, description: str | None) -> dict:
-        return await self._call("create_recipe", {"name": name, "description": description})
+    async def create_recipe(self, payload: dict) -> dict:
+        return await self._call("create_recipe", {"payload": payload})
 
     async def get_recipe(self, uuid: str) -> dict | None:
         return await self._call("get_recipe", {"uuid": uuid})
@@ -112,59 +138,3 @@ class _MCPRecipeRegistry:
 
     async def purge_recipes(self) -> dict:
         return await self._call("purge_recipes", {})
-
-    # ── Recipe ↔ Ingredient ───────────────────────────────────────────────────
-
-    async def link_ingredient_to_recipe(self, recipe_uuid: str, ingredient_uuid: str) -> dict:
-        return await self._call(
-            "link_ingredient_to_recipe", {"recipe_uuid": recipe_uuid, "ingredient_uuid": ingredient_uuid}
-        )
-
-    async def unlink_ingredient_from_recipe(self, recipe_uuid: str, ingredient_uuid: str) -> None:
-        await self._call(
-            "unlink_ingredient_from_recipe", {"recipe_uuid": recipe_uuid, "ingredient_uuid": ingredient_uuid}
-        )
-
-    async def list_recipe_ingredients(self, recipe_uuid: str) -> list[dict]:
-        return await self._call("list_recipe_ingredients", {"recipe_uuid": recipe_uuid})
-
-    # ── Recipe ↔ Ustensil ─────────────────────────────────────────────────────
-
-    async def link_ustensil_to_recipe(self, recipe_uuid: str, ustensil_uuid: str) -> dict:
-        return await self._call(
-            "link_ustensil_to_recipe", {"recipe_uuid": recipe_uuid, "ustensil_uuid": ustensil_uuid}
-        )
-
-    async def unlink_ustensil_from_recipe(self, recipe_uuid: str, ustensil_uuid: str) -> None:
-        await self._call(
-            "unlink_ustensil_from_recipe", {"recipe_uuid": recipe_uuid, "ustensil_uuid": ustensil_uuid}
-        )
-
-    async def list_recipe_ustensils(self, recipe_uuid: str) -> list[dict]:
-        return await self._call("list_recipe_ustensils", {"recipe_uuid": recipe_uuid})
-
-    # ── Steps ─────────────────────────────────────────────────────────────────
-
-    async def create_step(self, recipe_uuid: str, name: str, description: str | None) -> dict:
-        return await self._call("create_step", {"recipe_uuid": recipe_uuid, "name": name, "description": description})
-
-    async def get_step(self, uuid: str) -> dict | None:
-        return await self._call("get_step", {"uuid": uuid})
-
-    async def update_step(self, uuid: str, name: str, description: str | None) -> dict | None:
-        return await self._call("update_step", {"uuid": uuid, "name": name, "description": description})
-
-    async def delete_step(self, uuid: str) -> None:
-        await self._call("delete_step", {"uuid": uuid})
-
-    async def list_steps(self, name: str | None = None) -> list[dict]:
-        return await self._call("list_steps", {"name": name})
-
-    async def list_steps_for_recipe(self, recipe_uuid: str) -> list[dict]:
-        return await self._call("list_steps_for_recipe", {"recipe_uuid": recipe_uuid})
-
-    async def duplicate_step(self, uuid: str) -> dict:
-        return await self._call("duplicate_step", {"uuid": uuid})
-
-    async def purge_steps(self) -> dict:
-        return await self._call("purge_steps", {})

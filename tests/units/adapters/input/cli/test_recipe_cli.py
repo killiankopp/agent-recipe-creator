@@ -27,7 +27,22 @@ async def test_run_create_success(tmp_path):
         service.ai_create = AsyncMock(return_value=_RESULT)
         mock_bc.return_value = (service, MagicMock(), MagicMock())
         await _run_create("pasta carbonara", config)
-        service.ai_create.assert_awaited_once_with("pasta carbonara")
+        service.ai_create.assert_awaited_once_with("pasta carbonara", allow_duplicate=False)
+
+
+async def test_run_create_allows_duplicate(tmp_path):
+    config = tmp_path / "config.yaml"
+    config.write_text("")
+    with (
+        patch("adapters.input.cli.recipe_cli.Arclith"),
+        patch("adapters.input.cli.recipe_cli.load_agent_config"),
+        patch("adapters.input.cli.recipe_cli.build_container") as mock_bc,
+    ):
+        service = MagicMock()
+        service.ai_create = AsyncMock(return_value=_RESULT)
+        mock_bc.return_value = (service, MagicMock(), MagicMock())
+        await _run_create("pasta carbonara", config, allow_duplicate=True)
+        service.ai_create.assert_awaited_once_with("pasta carbonara", allow_duplicate=True)
 
 
 async def test_run_create_raises_on_error(tmp_path):
@@ -43,4 +58,3 @@ async def test_run_create_raises_on_error(tmp_path):
         mock_bc.return_value = (service, MagicMock(), MagicMock())
         with pytest.raises(typer.Exit):
             await _run_create("bad input", config)
-

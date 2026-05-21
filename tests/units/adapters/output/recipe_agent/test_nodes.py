@@ -4,15 +4,17 @@ from adapters.output.recipe_agent._nodes import (
     _format_response,
     _format_response_existing,
     make_check_recipe_node,
+    make_create_components_node,
     make_create_recipe_node,
     make_create_steps_node,
     make_link_ingredients_node,
     make_link_ustensils_node,
     make_plan_node,
+    make_review_plan_node,
     make_resolve_ingredients_node,
     make_resolve_ustensils_node,
 )
-from domain.models.recipe import IngredientLine, RecipePlan, RecipeStep, UstensilLine
+from domain.models.recipe import IngredientLine, RecipeComponentPlan, RecipePlan, RecipeStep, UstensilLine
 
 
 # ── Fakes ─────────────────────────────────────────────────────────────────────
@@ -24,6 +26,9 @@ class FakePlanner:
 
     async def plan(self, user_input: str) -> RecipePlan:
         return self._plan
+
+    async def review(self, raw_text: str, plan: RecipePlan) -> RecipePlan:
+        return plan
 
 
 class FakeRegistry:
@@ -43,10 +48,10 @@ class FakeRegistry:
         self.created_ingredients.append(item)
         return item
 
-    async def list_ustensils(self, name: str) -> list[dict]:
+    async def list_equipment(self, name: str) -> list[dict]:
         return []
 
-    async def create_ustensil(self, name: str) -> dict:
+    async def create_equipment(self, name: str) -> dict:
         item = {"uuid": f"ust-{name}", "name": name}
         self.created_ustensils.append(item)
         return item
@@ -54,8 +59,8 @@ class FakeRegistry:
     async def list_recipes(self, name: str) -> list[dict]:
         return []
 
-    async def create_recipe(self, name: str, description: str | None) -> dict:
-        item = {"uuid": "recipe-uuid", "name": name, "description": description}
+    async def create_recipe(self, payload: dict) -> dict:
+        item = {"uuid": "recipe-uuid", **payload}
         self.created_recipes.append(item)
         return item
 
@@ -79,7 +84,7 @@ class FakeRegistryWithExistingIngredient(FakeRegistry):
 
 
 class FakeRegistryWithExistingUstensil(FakeRegistry):
-    async def list_ustensils(self, name: str) -> list[dict]:
+    async def list_equipment(self, name: str) -> list[dict]:
         return [{"uuid": "existing-ust", "name": name}]
 
 
@@ -110,8 +115,12 @@ def _base_state(**kwargs) -> dict:
         "plan": None,
         "resolved_ingredients": {},
         "resolved_ustensils": {},
+        "resolved_components": [],
         "recipe_uuid": None,
         "recipe_exists": None,
+        "allow_duplicate": False,
+        "existing_recipe_uuid": None,
+        "existing_recipe_name": None,
         "error": None,
         **kwargs,
     }
@@ -147,6 +156,23 @@ async def test_plan_node_passes_message_content():
     assert received == ["ma recette spéciale"]
 
 
+async def test_review_plan_node_returns_reviewed_plan():
+    initial = _make_plan(name = "Beignets")
+    reviewed = _make_plan(name = "Beignets validés", ingredients = [IngredientLine(name = "sucre")])
+
+    class _ReviewingPlanner:
+        async def review(self, raw_text: str, plan: RecipePlan) -> RecipePlan:
+            assert raw_text == "recette brute"
+            assert plan is initial
+            return reviewed
+
+    node = make_review_plan_node(_ReviewingPlanner())
+    state = _base_state(plan = initial, messages = [HumanMessage(content = "recette brute")])
+    result = await node(state)
+
+    assert result["plan"] is reviewed
+
+
 # ── check_recipe node ──────────────────────────────────────────────────────────
 
 
@@ -167,6 +193,17 @@ async def test_check_recipe_found():
     assert result["recipe_uuid"] == "existing-recipe"
     assert len(result["messages"]) == 1
     assert "Beignets" in result["messages"][0]["content"]
+
+
+async def test_check_recipe_found_with_duplicate_allowed_continues_to_create():
+    registry = FakeRegistryWithExistingRecipe()
+    node = make_check_recipe_node(registry, _always_match)
+    state = _base_state(plan = _make_plan(name = "Beignets"), allow_duplicate = True)
+    result = await node(state)
+    assert result["recipe_exists"] is False
+    assert result["existing_recipe_uuid"] == "existing-recipe"
+    assert result["existing_recipe_name"] == "Beignets"
+    assert "messages" not in result
 
 
 # ── resolve_ingredients node ───────────────────────────────────────────────────
@@ -217,6 +254,58 @@ async def test_resolve_ingredients_empty_plan():
     assert result["resolved_ingredients"] == {}
 
 
+async def test_resolve_ingredients_skips_parent_total_when_components_exist():
+    registry = FakeRegistry()
+    node = make_resolve_ingredients_node(registry, _no_match)
+    state = _base_state(
+        plan = _make_plan(
+            ingredients = [IngredientLine(name = "lait")],
+            components = [RecipeComponentPlan(name = "Crème anglaise")],
+        )
+    )
+    result = await node(state)
+    assert result["resolved_ingredients"] == {}
+    assert registry.created_ingredients == []
+
+
+# ── create_components node ─────────────────────────────────────────────────────
+
+
+async def test_create_components_creates_missing_child_recipe():
+    registry = FakeRegistry()
+    node = make_create_components_node(registry, _no_match)
+    plan = _make_plan(
+        components = [
+            RecipeComponentPlan(
+                name = "Crème anglaise",
+                ingredients = [IngredientLine(name = "lait", quantity = "500", unit = "ml")],
+                steps = [RecipeStep(title = "Cuire", instruction = "Cuire la crème")],
+            )
+        ]
+    )
+    result = await node(_base_state(plan = plan))
+
+    assert result["resolved_components"][0]["recipe_uuid"] == "recipe-uuid"
+    assert result["resolved_components"][0]["label"] == "Crème anglaise"
+    assert registry.created_recipes[0]["name"] == "Crème anglaise"
+    assert registry.created_recipes[0]["ingredients"][0]["unit"] == "ml"
+
+
+async def test_create_components_reuses_existing_child_recipe():
+    registry = FakeRegistryWithExistingRecipe()
+    node = make_create_components_node(registry, _always_match)
+    plan = _make_plan(components = [RecipeComponentPlan(name = "Meringue")])
+    result = await node(_base_state(plan = plan))
+
+    assert result["resolved_components"] == [{
+        "recipe_uuid": "existing-recipe",
+        "label": "Meringue",
+        "rank": 1,
+        "servings_multiplier": 1.0,
+    }]
+    assert registry.created_recipes == []
+
+
 # ── resolve_ustensils node ─────────────────────────────────────────────────────
 
 
@@ -260,6 +349,26 @@ async def test_create_recipe_stores_uuid():
     assert result["recipe_uuid"] == "recipe-uuid"
     assert len(registry.created_recipes) == 1
     assert registry.created_recipes[0]["name"] == "Tarte Tatin"
+    assert registry.created_recipes[0]["servings"] == 1
+    assert registry.created_recipes[0]["ingredients"] == []
+
+
+async def test_create_recipe_includes_resolved_components():
+    registry = FakeRegistry()
+    node = make_create_recipe_node(registry)
+    plan = _make_plan(
+        name = "Île flottante",
+        ingredients = [IngredientLine(name = "lait")],
+        components = [RecipeComponentPlan(name = "Crème anglaise")],
+    )
+    state = _base_state(
+        plan = plan,
+        resolved_components = [{"recipe_uuid": "child-1", "label": "Crème anglaise", "rank": 1, "servings_multiplier": 1}],
+    )
+    await node(state)
+
+    assert registry.created_recipes[0]["components"][0]["recipe_uuid"] == "child-1"
+    assert registry.created_recipes[0]["ingredients"] == []
 
 
 async def test_create_recipe_without_description():
@@ -282,9 +391,7 @@ async def test_link_ingredients_links_all():
     )
     result = await node(state)
     assert result == {}
-    assert len(registry.linked_ingredients) == 2
-    assert ("r-1", "i-1") in registry.linked_ingredients
-    assert ("r-1", "i-2") in registry.linked_ingredients
+    assert registry.linked_ingredients == []
 
 
 async def test_link_ingredients_tolerates_error_response():
@@ -313,7 +420,7 @@ async def test_link_ustensils_links_all():
     state = _base_state(recipe_uuid = "r-1", resolved_ustensils = {"fouet": "u-1"})
     result = await node(state)
     assert result == {}
-    assert ("r-1", "u-1") in registry.linked_ustensils
+    assert registry.linked_ustensils == []
 
 
 async def test_link_ustensils_tolerates_error_response():
@@ -343,7 +450,7 @@ async def test_create_steps_creates_all():
         resolved_ustensils = {},
     )
     result = await node(state)
-    assert len(registry.created_steps) == 2
+    assert registry.created_steps == []
     assert "messages" in result
     assert len(result["messages"]) == 1
 

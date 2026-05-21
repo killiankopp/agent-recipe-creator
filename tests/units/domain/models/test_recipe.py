@@ -1,7 +1,14 @@
 import pytest
 from pydantic import ValidationError
 
-from domain.models.recipe import IngredientLine, RecipePlan, RecipeResult, RecipeStep, UstensilLine
+from domain.models.recipe import (
+    IngredientLine,
+    RecipeComponentPlan,
+    RecipePlan,
+    RecipeResult,
+    RecipeStep,
+    UstensilLine,
+)
 
 
 def test_ingredient_line_minimal():
@@ -44,6 +51,7 @@ def test_recipe_plan_defaults():
     assert plan.ingredients == []
     assert plan.ustensils == []
     assert plan.steps == []
+    assert plan.components == []
 
 
 def test_recipe_plan_full():
@@ -68,6 +76,23 @@ def test_recipe_plan_full():
     assert len(plan.steps) == 2
     assert plan.prep_time_minutes == 30
     assert plan.cook_time_minutes == 20
+
+
+def test_recipe_plan_with_component():
+    plan = RecipePlan(
+        name = "Île flottante",
+        components = [
+            RecipeComponentPlan(
+                name = "Crème anglaise",
+                ingredients = [IngredientLine(name = "lait", unit = "ml", quantity = "500")],
+                steps = [RecipeStep(title = "Cuire", instruction = "Cuire la crème")],
+            )
+        ],
+    )
+
+    assert len(plan.components) == 1
+    assert plan.components[0].name == "Crème anglaise"
+    assert plan.components[0].servings_multiplier == 1.0
 
 
 def test_recipe_result():

@@ -1,5 +1,12 @@
 # SKILLS.md — `agent-recipe-creator/`
 
+Recettes paramétriques pour les tâches récurrentes sur l'agent `agent-recipe-creator`.
+Pour les tâches cross-repo, voir `../SKILLS.md` à la racine du workspace.
+
+Format : chaque skill est identifiée `SK-A##` (A = Agent recipe creator), avec contexte, étapes, validation.
+
+---
+
 ## SK-A01 — Ajouter un nœud au graphe LangGraph
 
 **Contexte :** enrichir le pipeline agent (ex. validation post-création, enrichissement nutriscore).

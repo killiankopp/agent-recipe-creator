@@ -12,12 +12,24 @@ class _SuccessAgent(RecipeAgentPort):
     def __init__(self, result: RecipeResult) -> None:
         self._result = result
 
-    async def process(self, raw_text: str, run_uuid: str) -> RecipeResult:
+    async def process(
+            self,
+            raw_text: str,
+            run_uuid: str,
+            *,
+            allow_duplicate: bool = False,
+    ) -> RecipeResult:
         return self._result
 
 
 class _FailingAgent(RecipeAgentPort):
-    async def process(self, raw_text: str, run_uuid: str) -> RecipeResult:
+    async def process(
+            self,
+            raw_text: str,
+            run_uuid: str,
+            *,
+            allow_duplicate: bool = False,
+    ) -> RecipeResult:
         raise RuntimeError("LLM unavailable")
 
 
@@ -64,6 +76,45 @@ async def test_execute_success_stores_metadata():
     assert "elapsed_ms" in run.metadata
     assert run.metadata["resolved_ingredients"] == 1
     assert run.metadata["resolved_ustensils"] == 1
+    assert run.metadata["created"] is True
+    assert run.metadata["duplicate_confirmation_required"] is False
+
+
+async def test_execute_passes_allow_duplicate_to_agent():
+    received: list[bool] = []
+
+    class _CapturingAgent(RecipeAgentPort):
+        async def process(
+                self,
+                raw_text: str,
+                run_uuid: str,
+                *,
+                allow_duplicate: bool = False,
+        ) -> RecipeResult:
+            received.append(allow_duplicate)
+            return _make_result()
+
+    use_case = ProcessRawRecipeUseCase(
+        _CapturingAgent(), InMemoryRepository[AgentRun](), NullLogger()
+    )
+    await use_case.execute("recette de beignets", allow_duplicate = True)
+    assert received == [True]
+
+
+async def test_execute_duplicate_confirmation_stores_metadata():
+    repo = InMemoryRepository[AgentRun]()
+    result = _make_result(
+        created = False,
+        duplicate_confirmation_required = True,
+        existing_recipe_uuid = "existing-r",
+    )
+    use_case = ProcessRawRecipeUseCase(_SuccessAgent(result), repo, NullLogger())
+    await use_case.execute("recette déjà existante")
+
+    run = (await repo.find_all())[0]
+    assert run.metadata["created"] is False
+    assert run.metadata["duplicate_confirmation_required"] is True
+    assert run.metadata["existing_recipe_uuid"] == "existing-r"
 
 
 async def test_execute_failure_updates_run_to_failed():
@@ -91,7 +142,13 @@ async def test_execute_failure_reraises_original_exception():
 
 async def test_execute_unwraps_single_exception_group():
     class _GroupAgent(RecipeAgentPort):
-        async def process(self, raw_text: str, run_uuid: str) -> RecipeResult:
+        async def process(
+                self,
+                raw_text: str,
+                run_uuid: str,
+                *,
+                allow_duplicate: bool = False,
+        ) -> RecipeResult:
             raise BaseExceptionGroup("group", [ValueError("inner error")])
 
     repo = InMemoryRepository[AgentRun]()
@@ -107,7 +164,13 @@ async def test_execute_unwraps_single_exception_group():
 
 async def test_execute_reraises_multi_exception_group():
     class _MultiGroupAgent(RecipeAgentPort):
-        async def process(self, raw_text: str, run_uuid: str) -> RecipeResult:
+        async def process(
+                self,
+                raw_text: str,
+                run_uuid: str,
+                *,
+                allow_duplicate: bool = False,
+        ) -> RecipeResult:
             raise BaseExceptionGroup("group", [ValueError("e1"), RuntimeError("e2")])
 
     repo = InMemoryRepository[AgentRun]()
